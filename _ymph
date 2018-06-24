@@ -1,0 +1,24 @@
+#compdef ymph
+local -a cmds
+cmds=('play:resume the player' 'pause:pause the player' 'prev:jump to previous music' 'stop:stop the player' 'play-pause:toggle play/pause' 'next:skip current music')
+
+_describe 'command' cmds
+_arguments '--help[print help and exit]'\
+        '-h[print help and exit]'\
+        '--url[specify playlist url]'\
+        '-u[specify playlist url]'\
+        '--save-as[save the playlist to the given file]:filename:_files'\
+        '-s[save the playlist to the given file]:filename:_files'\
+        '--file[use the specified playlist]:filename:_files'\
+        '-f[use the specified playlist]:filename:_files'\
+        '--random[randomize the playing order]'\
+        '-r[randomize the playing order]'\
+        '--download-dir[specify the audio directory]:filename:_files'\
+        '-d[specify the audio directory]:filename:_files'\
+        '--temp-dir[specify the temporary folder]:filename:_files'\
+        '--normalize[normalize audio]'\
+        '-N[normalize audio]'\
+        '--show-cache[show the list of cached files]'\
+        '--clear-cache[clears the cache]'\
+        '--load-ahead[specify the number of audio files to load ahead]'
+
