@@ -4,6 +4,23 @@ Youtube Music Playlist Helper (ymph) is a script designed to help you to play yo
 
 It currently only supports vlc (which must have been launched via 'vlcd' before hand), but can be easily adapted by editing the first few lines, in which case you won't need 'vlc-ctl' and 'vlcd' (this will be configurable in the future)
 
+## Dependencies
+
+ymph has the following dependencies (arch linux package names):
+
+* bash
+* coreutils 
+* ffmpeg
+* grep
+* procps-ng
+* util-linux
+* youtube-dl
+
+if you choose to use vlcd and vlc-ctl, following depencies are added:
+
+* openbsd-netcat
+* vlc
+
 ## Usage
 
 Available options:
