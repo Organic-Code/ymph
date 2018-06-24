@@ -1,0 +1,739 @@
+#!/bin/bash
+
+function play() {
+    file="$1"
+    vlc-ctl add "$file"
+}
+
+function stop_player() {
+    vlc-ctl restart
+}
+
+function pause_player() {
+    vlc-ctl pause
+}
+
+function resume_player() {
+    vlc-ctl play
+}
+
+function show_help() {
+    printf "Script helping you to play YouTube music playlists\n"
+    printf "\n"
+    printf "Available options:\n"
+    printf "\n"
+    printf "\t--help                   -h  print this text and exit\n"
+    printf "\n"
+    printf "\t--url <playlist_url>     -u  URL to the youtube playlist\n"
+    printf "\t--save-as <save_file>    -s  save the playlist to the given file\n"
+    printf "\t                             The file can be used with --file later on\n"
+    printf "\t                             To be used with --url\n"
+    printf "\t--file <playlist_file>   -f  use the specified playlist, previously saved with --save-as.\n"
+    printf "\t                             Cannot be used together with --save-as\n"
+    printf "\t                             If --url is not specified, it will take a default value.\n"
+    printf "\t                             defaults to \$XDG_MUSIC_DIR/youtube.playlist,\n"
+    printf "\t                                      or \$HOME/Music/youtube.playlist if \$XDG_MUSIC_DIR is not set\n"
+    printf "\t--random                 -r  randomize the music order\n"
+    printf "\t--normalize              -N  normalize audio file after download (disabled by default)\n"
+    printf "\t                             [! might take some time]\n"
+    printf "\t--no-cache                   delete audio files after playing them\n"
+    printf "\t--next                 next  skip current music\n"
+    printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
+    printf "\t--prev                 prev  Back to previous music\n"
+    printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
+    printf "\t                             This command is supported only if the playlist was not randomized\n"
+    printf "\t--stop                 stop  stop the player\n"
+    printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
+    printf "\t--pause               pause  pause the player\n"
+    printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
+    printf "\t--play                 play  resume the player\n"
+    printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
+    printf "\t--play-pause     play-pause  toggle play/pause\n"
+    printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
+    printf "\n"
+    printf "\t--load-ahead <N>             Specify the number of audio files to load ahead. Defaults to 3. [For in order playlists only].\n"
+    printf "\t                             Ignored for randomized playlists.\n"
+    printf "\t--show-cache                 Show the list of files in cache folder\n"
+    printf "\t--clear-cache                Clears the cache\n"
+    printf "\t--download-dir <folder>  -d  specifies a folder where to download audio file\n"
+    printf "\t                             Defaults to \$XDG_CACHE_HOME/ymph,\n"
+    printf "\t                                      or \$HOME/.cache/ymph if \$XDG_CACHE_HOME is not set\n"
+    printf "\t--temp-dir <folder>          specifies a folder where to put temporary files.\n"
+    printf "\t                             Defaults to \$XDG_RUNTIME_DIR, or /tmp/\$UID if \$XDG_RUNTIME_DIR is not set\n"
+}
+
+function download_sound() {
+
+    if [[ -f "$DOWNLOAD_DIR/$1" ]]; then
+        printf "$DEFAULT_COLOR\tUsing cached $ID_COLOR$1\n"
+        return 0
+    elif [[ -f "$DOWNLOAD_DIR/$1.invalid" ]]; then
+        printf "$ERROR_COLOR\tError: $ID_COLOR$1$DEFAULT_COLOR has been marked as invalid.\n" >&2
+        printf "\tTo try to redownload, delete the file $ID_COLOR$DOWNLOAD_DIR/$1.invalid\n" >&2
+        return 1
+    fi
+    printf "\t$ID_COLOR$1$DEFAULT_COLOR is not present in cache. Downloading it.\n"
+
+    local audio_formats=$(youtube-dl --no-warnings -F -- "$1" | env grep "audio only" 2>/dev/null)
+    local format_count=$(echo "$audio_formats" | wc -l)
+
+    if [[ $format_count -gt 1 ]]; then
+        local audio_formats_2=$(echo "$audio_formats" | env grep -v "worst")
+        local format_count=$(echo "$audio_formats" | wc -l)
+
+        if [[ $format_count -ge 1 ]]; then
+            local audio_formats="$audio_formats_2"
+            local audio_formats_2=$(echo "$audio_formats" | env grep "m4a")
+            local format_count=$(echo "$audio_formats" | wc -l)
+
+            if [[ $format_count -ge 1 ]]; then
+                local audio_formats="$audio_formats_2"
+            fi
+        fi
+    fi
+
+    local format=$(echo "$audio_formats" | head -n1 | cut -d ' ' -f 1)
+    local extension=$(echo "$audio_formats" | head -n1 | sed 's/[0-9]\+ \+//' | cut -d ' ' -f 1)
+
+    youtube-dl --no-warnings -q -f $format --add-metadata -o "$DOWNLOAD_DIR/$1.$extension" -- "$1" >/dev/null 2>/dev/null
+
+    if [[ $? == 0 ]]; then
+        printf "\t$ID_COLOR$1$DEFAULT_COLOR: download complete.\n"
+
+        if [[ $NORMALIZE == "true" ]]; then
+            printf "\t$ID_COLOR$1$DEFAULT_COLOR: normalizing.\n"
+            local file_info=$(ffmpeg -y -i "$DOWNLOAD_DIR/$1.$extension" -pass 1 -filter:a loudnorm=print_format=json -f null - 2>&1)
+            local lra=$(echo $file_info | grep "input_lra" | sed 's/.*"input_lra" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+            local tp=$(echo $file_info | grep "input_tp" | sed 's/.*"input_tp" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+            local thresh=$(echo $file_info | grep "input_thresh" | sed 's/.*"input_thresh" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+            local i=$(echo $file_info | grep "input_i" | sed 's/.*"input_i" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+
+            yes | ffmpeg -loglevel panic -i "$DOWNLOAD_DIR/$1.$extension" -pass 2 -filter:a dynaudnorm=f=1000,loudnorm=linear=true:measured_I=$i:measured_LRA=$lra:measured_tp=$tp:measured_thresh=$thresh "$DOWNLOAD_DIR/$1.norm.$extension"
+
+            rm "$DOWNLOAD_DIR/$1.$extension"
+            mv "$DOWNLOAD_DIR/$1.norm.$extension" "$DOWNLOAD_DIR/$1"
+        else
+            mv "$DOWNLOAD_DIR/$1.$extension" "$DOWNLOAD_DIR/$1"
+        fi
+        printf "$ID_COLOR$1$DEFAULT_COLOR: ready.\n"
+
+        return 0
+    else
+
+        printf "$ERROR_COLOR\tError$DEFAULT_COLOR downloading $ID_COLOR$1.\n" >&2
+        touch "$DOWNLOAD_DIR/$1.invalid"
+        return 1
+    fi
+
+}
+
+function readable_size() {
+    local size=$1
+    local suffix="o"
+    if [[ $size -gt 2048 ]]; then
+        let "size = size / 1024"
+        suffix="kio"
+    fi
+    if [[ $size -gt 2048 ]]; then
+        let "size = size / 1024"
+        suffix="Mio"
+    fi
+    if [[ $size -gt 2048 ]]; then
+        let "size = size / 1024"
+        suffix="Gio"
+    fi
+    printf "$size$suffix"
+}
+
+function readable_time() {
+    local seconds=$1
+    local minutes=$(($seconds / 60))
+    let "seconds = seconds - 60 * minutes"
+
+    local hours=$(($minutes / 60))
+    let "minutes = minutes - 60 * hours"
+
+    local days=$(($hours / 24))
+    let "hours = hours - 24 * days"
+
+    if [[ $days -gt 0 ]]; then
+        printf "$days"
+        printf "d "
+    fi
+
+    if [[ $hours -lt 10 ]]; then
+        printf "0$hours:"
+    else
+        printf "$hours:"
+    fi
+
+    if [[ $minutes -lt 10 ]]; then
+        printf "0$minutes'"
+    else
+        printf "$minutes'"
+    fi
+
+    if [[ $seconds -eq 0 ]]; then
+        printf "00"
+    elif [[ $seconds -lt 10 ]]; then
+        printf "0$seconds"
+    else
+        printf "$seconds"
+    fi
+}
+
+COMMAND=$(echo $0 | sed 's/.*\/\(.*\)/\1/')
+
+ID_COLOR="\e[38;5;14m"
+ERROR_COLOR="\e[38;5;9m"
+DEFAULT_COLOR="\e[38;5;15m"
+TITLE_COLOR="\e[38;5;82m"
+REQUEST_COLOR="\e[38;5;226m"
+
+SKIP="false"
+PREV="false"
+STATE_CHANGED="false"
+STATE="play"
+PAUSED_TIME=0
+PAUSED_SINCE="invalid"
+
+function skip_sig() {
+    printf "$REQUEST_COLOR"
+    printf "Received: next. ASAP Master\n"
+    printf "$DEFAULT_COLOR"
+    SKIP="true"
+    PREV="false"
+}
+
+function prev_sig() {
+   if [[ $RAND == "false" ]]; then
+        printf "$REQUEST_COLOR"
+        printf "Received: prev. ASAP Master\n"
+        printf "$DEFAULT_COLOR"
+        PREV="true"
+        SKIP="false"
+    else
+        printf "$ERROR_COLOR" >&2
+        printf "Warning:$REQUEST_COLOR prev$ERROR_COLOR was invoked, but we are playing at random.\n" >&2
+        printf "Try $0 --help.\n$DEFAULT_COLOR" >&2
+    fi
+}
+
+function bye_sig() { 
+    printf "$REQUEST_COLOR"
+    printf "Received: quit. Good bye\n"
+    printf "$DEFAULT_COLOR"
+ 
+    rm "$PID_FILE"
+    if [[ -f "$TEMPORARY_FILE" ]]; then
+        rm "$TEMPORARY_FILE"
+    fi
+
+    if [[ $CACHING == "false" ]]; then
+        rm "$DOWNLOAD_DIR/$id" 2>/dev/null
+        rm "$DOWNLOAD_DIR/$current_id"
+    fi
+
+    rm "$DOWNLOAD_DIR/"*.* 2>/dev/null
+    stop_player
+    exit
+}
+
+function play_sig() {
+    printf "$REQUEST_COLOR"
+    printf "Received: play\n"
+    printf "$DEFAULT_COLOR"
+    
+    if [[ $STATE == "pause" ]]; then
+        STATE_CHANGED="true"
+    fi
+    STATE="play"
+
+    if [[ $PAUSED_SINCE != "invalid" ]]; then
+        local paused_until=$(date +%s)
+        let "PAUSED_TIME += paused_until - PAUSED_SINCE"
+    fi
+    PAUSED_SINCE="invalid"
+
+    resume_player
+}
+
+function toggle_sig() {
+    if [[ $STATE == "play" ]]; then
+        pause_sig
+    else
+        play_sig
+    fi
+}
+
+function pause_sig() {
+    printf "$REQUEST_COLOR"
+    printf "Received: pause\n"
+    printf "$DEFAULT_COLOR"
+
+    if [[ $STATE == "play" ]]; then
+        STATE_CHANGED="true"
+    fi
+    STATE="pause"
+    STATE_CHANGED="true"
+    PAUSED_SINCE=$(date +%s)
+    pause_player
+}
+
+function quit_sig() {
+    exit 1
+}
+
+trap bye_sig    INT
+trap skip_sig   34
+trap bye_sig    35
+trap prev_sig   36
+trap play_sig   37
+trap toggle_sig 38
+trap pause_sig  39
+trap quit_sig   40
+
+
+if [[ ! -z ${XDG_MUSIC_DIR+set} ]]; then
+    PLAYLIST_FILE="$XDG_MUSIC_DIR/youtube.playlist"
+else
+    PLAYLIST_FILE="$HOME/Music/youtube.playlist"
+fi
+
+if [[ ! -z ${XDG_CACHE_HOME+set} ]]; then
+    DOWNLOAD_DIR="$XDG_CACHE_HOME/ymph"
+else
+    DOWNLOAD_DIR="$HOME/.cache/ymph"
+fi
+
+CUSTOM_PLAYLIST="false"
+RAND="false"
+SAVE_AS="false"
+REMOTE="none"
+NORMALIZE="false"
+CACHING="true"
+AHEAD_LOADING=3
+if [[ ! -z ${XDG_RUTIME_DIR+set} ]]; then
+    TEMPORARY_DIR="/tmp/$UID"
+    mkdir -p "$TEMPORARY_DIR"
+else
+    TEMPORARY_DIR="$XDG_RUNTIME_DIR"
+fi
+
+
+while [[ $# -ge 1 ]] ; do
+    case "$1" in
+    --help|-h|help)
+        show_help
+        exit 0
+        ;;
+    --save-as|-s)
+        if [[ "$CUSTOM_PLAYLIST" == "true" ]]; then
+            printf "field $1 is mutually exclusive with --file|-f.\n" >&2
+            printf "Try $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        if [[ "$#" -gt 1 ]]; then
+            shift
+            PLAYLIST_FILE="$1"
+            SAVE_AS="true"
+            shift
+        else
+            printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        ;;
+    --random|-r)
+        shift
+        RAND="true"
+        ;;
+    --url|-u)
+        if [[ "$#" -gt 1 ]]; then
+            shift
+            PLAYLIST_URL="$1"
+            shift
+        else
+            printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        ;;
+    --file|-f)
+        if [[ $SAVE_AS == "true" ]]; then
+            printf "field $1 is mutually exclusive with --save-as|-s.\n" >&2
+            printf "Try $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        if [[ "$#" -gt 1 ]]; then
+            shift
+            PLAYLIST_FILE="$1"
+            CUSTOM_PLAYLIST="true"
+            shift
+        else
+            printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        ;;
+    --download-dir|-d)
+        if [[ "$#" -gt 1 ]]; then
+            shift
+            DOWNLOAD_DIR="$1"
+            shift
+        else
+            printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        ;;
+    --temp-dir)
+        if [[ "$#" -gt 1 ]]; then
+            shift
+            TEMPORARY_DIR=$1
+            TEMPORARY_FILE="$1/youtube.playlist"
+            shift
+        else
+            printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        ;;
+    --next|next)
+        REMOTE="-34"
+        shift
+        ;;
+    --prev|prev)
+        REMOTE="-36"
+        shift
+        ;;
+    --stop|stop)
+        REMOTE="-35"
+        shift
+        ;;
+    --play|play)
+        shift
+        REMOTE="-37"
+        ;;
+    --play-pause|play-pause)
+        shift
+        REMOTE="-38"
+        ;;
+    --pause|pause)
+        shift
+        REMOTE="-39"
+        ;;
+    --normalize|-N)
+        shift
+        NORMALIZE="true"
+        ;;
+    --load-ahead)
+        if [[ "$#" -gt 1 ]]; then
+            shift
+            re='^[0-9]+$'
+            if ! [[ "$1" =~ $re ]] ; then
+                printf "field --load-ahead: $1 is not an integer.\n"
+                exit 1
+            fi
+            AHEAD_LOADING="$1"
+            shift
+        else
+            printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
+            exit 1
+        fi
+        ;;
+    --no-cache)
+        shift
+        CACHING=false
+        ;;
+    --show-cache)
+        size=0
+        duration=0
+        valid_count=0
+        invalid_count=0
+        heaviest=-1
+        heaviest_id=?
+        longest=-1
+        longest_id=?
+        printf "Cache folder: $DOWNLOAD_DIR\n"
+        printf "File list:\n"
+        for i in $(ls "$DOWNLOAD_DIR"); do
+            if [[ $(echo $i | cut -d '.' -f 2) == "invalid" ]]; then
+                printf "$ID_COLOR$(echo $i | cut -d '.' -f 1)$ERROR_COLOR\tVideo is unavailable\n"
+                let "invalid_count++"
+
+            elif [[ $(echo $i | cut -d '.' -f 2) == "$i" ]]; then
+                printf "$ID_COLOR$i\t$TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$i -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)\n"
+
+                this_duration=$(ffprobe -i $DOWNLOAD_DIR/$i -show_entries format=duration -v quiet -of csv="p=0" | cut -d '.' -f 1)
+                duration=$(($duration + $this_duration))
+                if [[ $this_duration -gt $longest ]]; then
+                    longest=$this_duration
+                    longest_id=$i
+                fi
+
+                this_size=$(stat --printf="%s" "$DOWNLOAD_DIR/$i")
+                size=$(($size + $this_size))
+                if [[ $this_size -gt $heaviest ]]; then
+                    heaviest=$this_size
+                    heaviest_id=$i
+                fi
+
+                let "valid_count++"
+            fi
+        done
+        printf "$DEFAULT_COLOR"
+        printf "\nValid tracks:     $valid_count"
+        printf "\nBad tracks:       $invalid_count"
+        printf "\nTotal cache size: "
+        readable_size $size
+        printf "\nTotal duration:   "
+        readable_time $duration
+        printf "\nHeaviest file:   $ID_COLOR $heaviest_id$DEFAULT_COLOR - $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$heaviest_id -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)"
+        printf "$DEFAULT_COLOR ["
+        readable_size $heaviest
+        printf "]"
+        printf "\nLongest music:   $ID_COLOR $longest_id$DEFAULT_COLOR - $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$heaviest_id -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)"
+        printf "$DEFAULT_COLOR ["
+        readable_time $longest
+        printf "]\n"
+        exit 0
+        ;;
+    --clear-cache)
+        rm "$DOWNLOAD_DIR"/* 2>/dev/null
+        exit 0
+        ;;
+    *)
+        printf "$COMMAND: $1: Unknow field.\nTry $COMMAND --help.\n" >&2
+        exit 1
+    esac
+
+done
+
+PID_FILE="$TEMPORARY_DIR/ymph"
+TEMPORARY_FILE="$TEMPORARY_DIR/youtube.playlist"
+
+if [[ -f "$PID_FILE" ]]; then
+    if [[ "$REMOTE" == "none" ]]; then
+        printf "Already running!\n"
+        exit 2
+    else
+        kill $REMOTE $(cat "$PID_FILE")
+        exit 0
+    fi
+elif [[ "$REMOTE" != "none" ]]; then
+    printf "ymph is not running!\n"
+    exit 2
+else
+    echo "$$" > "$PID_FILE"
+fi
+
+
+
+
+if [[ "$SAVE_AS" == "true" ]]; then
+    if [[ -z "$PLAYLIST_URL" ]]; then
+        printf "--save-dir field specified, but no url was given.\n" >&2
+        printf "Try $COMMAND --help.\n" >&2
+        exit 1
+    fi
+    mkdir -p "${PLAYLIST_FILE%/*}"
+    youtube-dl --flat-playlist -j -- "$PLAYLIST_URL" | jq -r '.id' > "$PLAYLIST_FILE"
+else
+    if [[ ! -z "$PLAYLIST_URL" ]]; then
+        PLAYLIST_FILE="$TEMPORARY_FILE"
+        mkdir -p "${PLAYLIST_FILE%/*}"
+        youtube-dl --flat-playlist -j -- "$PLAYLIST_URL" | jq -r '.id' > "$PLAYLIST_FILE"
+    fi
+fi
+
+if [[ ! -f "$PLAYLIST_FILE" || $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) -eq 0 ]]; then
+    printf "$ERROR_COLOR" >&2
+    printf "Error:$DEFAULT_COLOR the playlist is empty!\n" >&2
+    exit 3
+fi
+
+mkdir -p "$DOWNLOAD_DIR"
+
+if [[ $RAND == "true" ]]; then
+    AHEAD_LOADING=0
+fi
+
+
+function next_id() {
+    if [[ $RAND == "true" ]]; then
+        id=$(shuf -n 1 "$PLAYLIST_FILE")
+        ahead_id=$id
+    else
+        let "count++"
+        if [[ $count -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
+            count=1
+        fi
+        id=$(head -n $count "$PLAYLIST_FILE" | tail -n1)
+
+        let "ahead_count++"
+        if [[ $ahead_count -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
+            ahead_count=1
+        fi
+        ahead_id=$(head -n $ahead_count "$PLAYLIST_FILE" | tail -n1)
+    fi
+}
+
+function prev_id() {
+    if [[ $RAND == "true" ]]; then
+        printf "$ERROR_COLOR" >&2
+        printf "ERROR\n$DEFAULT_COLOR" >&2
+
+    else
+        let "count--"
+        if [[ $count == 0 ]]; then
+            count=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
+        fi
+        id=$(head -n $count "$PLAYLIST_FILE" | tail -n1)
+
+        while [[ -f "$DOWNLOAD_DIR/$id.invalid" ]]; do
+            let "count--"
+            if [[ $count == 0 ]]; then
+                count=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
+            fi
+            id=$(head -n $count "$PLAYLIST_FILE" | tail -n1)
+        done
+
+        let "ahead_count = count + AHEAD_LOADING"
+        local file_size=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
+        if [[ $ahead_count -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
+            let "ahead_count -= file_size"
+        fi
+        ahead_id=$(head -n  $ahead_count "$PLAYLIST_FILE" | tail -n1)
+    fi
+}
+
+count=0
+ahead_count=$(($AHEAD_LOADING - 1))
+dl_pids=()
+ans=1
+
+while [[ $ans != 0 ]]; do
+    next_id
+    printf "$DEFAULT_COLOR"
+    printf "Preparing music for video $ID_COLOR$id\n"
+    download_sound "$id"
+    ans=$?
+done
+
+count_cpy=$count
+id_cpy=$id
+for i in $(seq 0 $(($AHEAD_LOADING - 1))); do
+    next_id
+    download_sound "$id" &
+    dl_pids[$i]=$!
+done
+count=$count_cpy
+id=$id_cpy
+
+while [[ true ]]; do
+
+    if [[ $PREV == "false" ]]; then
+        if [[ ! -z "$current_id" && -f "$DOWNLOAD_DIR/$current_id" ]]; then
+            if [[ $CACHING == "false" ]]; then
+                rm "$DOWNLOAD_DIR/$current_id"
+            fi
+        fi
+        current_id="$id"
+
+        printf "$ID_COLOR"
+        printf "Now playing $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$current_id -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)$DEFAULT_COLOR [$ID_COLOR$id$DEFAULT_COLOR]\n"
+        play "$DOWNLOAD_DIR/$current_id"
+    else
+        prev_id
+    fi
+
+    ans=1
+    starting_time=$(date +%s)
+    NOSLEEP="false"
+    PAUSED_TIME=0
+    while [[ $ans != 0 ]]; do
+
+        if [[ $PREV == "true" ]]; then
+            prev_id
+            current_id=""
+            PREV="false"
+            NOSLEEP="true"
+
+            kill -40 ${dl_pids[$(($AHEAD_LOADING - 1))]} 2>/dev/null
+            rm "$DOWNLOAD_DIR/$ahead_id."* 2>/dev/null
+            while [[ $ans != 0 ]]; do
+                printf "$DEFAULT_COLOR"
+                printf "Preparing music for video $ID_COLOR$id\n"
+                download_sound $id
+                ans=$?
+            done
+
+        else
+            next_id
+
+            printf "$DEFAULT_COLOR"
+            printf "Preparing music for video $ID_COLOR$ahead_id\n"
+
+            download_sound $ahead_id &
+            dl_pid=$!
+
+            if [[ $RAND == true ]]; then
+                wait $dl_pid
+                ans=$?
+
+                while [[ $(ps -p $dl_pid | wc -l) -gt 1 ]]; do
+                    wait $dl_pid
+                    ans=$?
+                done
+
+            else
+
+
+                wait ${dl_pids[0]}
+                ans=$?
+
+                while [[ $PREV == "false" && $(ps -p ${dl_pids[0]} | wc -l) -gt 1 ]]; do
+                    wait ${dl_pids[0]}
+                    ans=$?
+                done
+
+                if [[ $PREV == "false" ]]; then
+                    for i in $(seq 0 $(($AHEAD_LOADING - 2))); do
+                        dl_pids[$i]=${dl_pids[$(($i + 1))]}
+                    done
+                    dl_pids[$(($AHEAD_LOADING - 1))]=$dl_pid
+                fi
+            fi
+        fi
+
+        if [[ $PREV == "true" ]]; then
+            prev_id
+            ans=1
+        fi
+
+    done
+
+    if [[ $SKIP == "false" && $NOSLEEP="false" ]]; then
+        total_duration="$(ffprobe -i $DOWNLOAD_DIR/$current_id -show_entries format=duration -v quiet -of csv="p=0" | cut -d '.' -f 1)"
+        ending_time=$(date +%s)
+        if [[ $STATE == "pause" ]]; then
+            paused_until=$(date +%s)
+            let "PAUSED_TIME += paused_until - PAUSED_SINCE"
+        fi
+        total_sleep_time=$(($total_duration + $starting_time - $ending_time + $PAUSED_TIME))
+        if [[ $total_sleep_time -lt 0 ]]; then
+            total_sleep_time=0
+        fi
+        
+        while [[ $total_sleep_time -gt 0 && $SKIP == "false" && $PREV == "false" ]]; do
+            if [[ $STATE == "pause" ]]; then
+                sleep 10d &
+                wait $!
+            else
+                sleep_beg=$(date +%s)
+                sleep $total_sleep_time &
+                wait $!
+                sleep_end=$(date +%s)
+                let "total_sleep_time -= sleep_end - sleep_beg"
+            fi
+        done
+    fi
+    SKIP="false"
+done
+

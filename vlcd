@@ -1,0 +1,10 @@
+#!/bin/bash
+
+process=$(pgrep -a "vlc" | env grep "vlc -I telnet")
+if [ ! -z "$process" ]; then
+	echo "vlcd is already running!" >&2
+	exit 1
+fi
+vlc -I telnet --telnet-password awesome_telnet_password > /dev/null 2>&1 &
+disown
+

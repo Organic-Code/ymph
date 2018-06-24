@@ -1,0 +1,112 @@
+#!/bin/bash
+
+upd_bar() {
+    sleep 1.5
+    pkill -SIGRTMIN+9 i3blocks
+}
+
+print_help() {
+	echo '+----[ CLI commands ]'
+	echo '| add XYZ  . . . . . . . . . . . . . . . . . . . . add XYZ to playlist'
+	echo '| enqueue XYZ  . . . . . . . . . . . . . . . . . queue XYZ to playlist'
+#	echo '| playlist . . . . . . . . . . . . .  show items currently in playlist'
+#	echo '| search [string]  . .  search for items in playlist (or reset search)'
+	echo '| delete [X] . . . . . . . . . . . . . . . . delete item X in playlist'
+	echo '| move [X][Y]  . . . . . . . . . . . . move item X in playlist after Y'
+	echo '| sort key . . . . . . . . . . . . . . . . . . . . . sort the playlist'
+#	echo '| sd [sd]  . . . . . . . . . . . . . show services discovery or toggle'
+	echo '| play . . . . . . . . . . . . . . . . . . . . . . . . . . play stream'
+	echo '| stop . . . . . . . . . . . . . . . . . . . . . . . . . . stop stream'
+	echo '| next . . . . . . . . . . . . . . . . . . . . . .  next playlist item'
+	echo '| prev . . . . . . . . . . . . . . . . . . . .  previous playlist item'
+	echo '| goto, gotoitem . . . . . . . . . . . . . . . . .  goto item at index'
+	echo '| repeat [on|off]  . . . . . . . . . . . . . .  toggle playlist repeat'
+	echo '| loop [on|off]  . . . . . . . . . . . . . . . .  toggle playlist loop'
+	echo '| random [on|off]  . . . . . . . . . . . . . .  toggle playlist random'
+	echo '| clear  . . . . . . . . . . . . . . . . . . . . .  clear the playlist'
+#	echo '| status . . . . . . . . . . . . . . . . . . . current playlist status'
+#	echo '| title [X]  . . . . . . . . . . . . . . set/get title in current item'
+#	echo '| title_n  . . . . . . . . . . . . . . . .  next title in current item'
+#	echo '| title_p  . . . . . . . . . . . . . .  previous title in current item'
+#	echo '| chapter [X]  . . . . . . . . . . . . set/get chapter in current item'
+#	echo '| chapter_n  . . . . . . . . . . . . . .  next chapter in current item'
+#	echo '| chapter_p  . . . . . . . . . . . .  previous chapter in current item'
+	echo '| '
+	echo '| seek X . . . . . . . . . . . seek in seconds, for instance "seek 12"'
+	echo '| pause  . . . . . . . . . . . . . . . . . . . . . . . .  toggle pause'
+	echo '| fastforward  . . . . . . . . . . . . . . . . . . set to maximum rate'
+	echo '| rewind . . . . . . . . . . . . . . . . . . . . . set to minimum rate'
+	echo '| faster . . . . . . . . . . . . . . . . . .  faster playing of stream'
+	echo '| slower . . . . . . . . . . . . . . . . . .  slower playing of stream'
+	echo '| normal . . . . . . . . . . . . . . . . . .  normal playing of stream'
+	echo '| rate [playback rate] . . . . . . . . . .  set playback rate to value'
+	echo '| frame  . . . . . . . . . . . . . . . . . . . . . play frame by frame'
+	echo '| fullscreen, f, F [on|off]  . . . . . . . . . . . . toggle fullscreen'
+#	echo '| info [X] . .  information about the current stream (or specified id)'
+#	echo '| stats  . . . . . . . . . . . . . . . .  show statistical information'
+#	echo "| get_time . . . . . . . . .  seconds elapsed since stream's beginning"
+#	echo '| is_playing . . . . . . . . . . . .  1 if a stream plays, 0 otherwise'
+#	echo '| get_title  . . . . . . . . . . . . . the title of the current stream'
+#	echo '| get_length . . . . . . . . . . . .  the length of the current stream'
+	echo '| '
+	echo '| volume [X] . . . . . . . . . . . . . . . . . .  set/get audio volume'
+	echo '| volup [X]  . . . . . . . . . . . . . . .  raise audio volume X steps'
+	echo '| voldown [X]  . . . . . . . . . . . . . .  lower audio volume X steps'
+	echo '| achan [X]  . . . . . . . . . . . .  set/get stereo audio output mode'
+	echo '| atrack [X] . . . . . . . . . . . . . . . . . . . set/get audio track'
+	echo '| vtrack [X] . . . . . . . . . . . . . . . . . . . set/get video track'
+	echo '| vratio [X] . . . . . . . . . . . . . . .  set/get video aspect ratio'
+	echo '| vcrop, crop [X]  . . . . . . . . . . . . . . . .  set/get video crop'
+	echo '| vzoom, zoom [X]  . . . . . . . . . . . . . . . .  set/get video zoom'
+	echo '| vdeinterlace [X] . . . . . . . . . . . . . set/get video deinterlace'
+	echo '| vdeinterlace_mode [X]  . . . . . . .  set/get video deinterlace mode'
+#	echo '| snapshot . . . . . . . . . . . . . . . . . . . . take video snapshot'
+	echo '| strack [X] . . . . . . . . . . . . . . . . .  set/get subtitle track'
+	echo '| '
+	echo '| vlm  . . . . . . . . . . . . . . . . . . . . . . . . .  load the VLM'
+#	echo '| description  . . . . . . . . . . . . . . . . .  describe this module'
+#	echo '| help, ? [pattern]  . . . . . . . . . . . . . . . . .  a help message'
+#	echo '| longhelp [pattern] . . . . . . . . . . . . . . a longer help message'
+#	echo '| lock . . . . . . . . . . . . . . . . . . . .  lock the telnet prompt'
+#	echo '| logout . . . . . . . . . . . . . .  exit (if in a socket connection)'
+#	echo '| quit . . . . . . . .  quit VLC (or logout if in a socket connection)'
+	echo '| shutdown . . . . . . . . . . . . . . . . . . . . . . .  shutdown VLC'
+	echo '+----[ end of help ]'
+}
+
+if [[ "$1" == "--help" ]]; then
+	print_help
+	exit
+fi
+if [[ "$1" == "-h" ]]; then
+	print_help
+	exit
+fi
+if [[ "$1" == "help" ]]; then
+	print_help
+	exit
+fi
+if [[ "$1" == "h" ]]; then
+	print_help
+	exit
+fi
+
+if [[ "$1" == "addall" ]]; then
+	for i in $(cat $2); do
+		vlc-ctl add "$i"
+	done
+	exit
+fi
+
+if [[ "$1" == "restart" ]]; then
+	vlc-ctl shutdown
+	sleep 1
+	vlcd
+    sleep 0.5
+    pkill -SIGRTMIN+9 i3blocks
+	exit
+fi
+
+echo -e "awesome_telnet_password\n$@\nquit\n\n" | netcat localhost 4212 > /dev/null
+upd_bar &
+
