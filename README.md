@@ -12,6 +12,7 @@ ymph has the following dependencies (arch linux package names):
 * coreutils 
 * ffmpeg
 * grep
+* jq
 * procps-ng
 * util-linux
 * youtube-dl
