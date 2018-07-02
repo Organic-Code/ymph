@@ -55,8 +55,7 @@ function show_help() {
     printf "\t--play-pause     play-pause  toggle play/pause\n"
     printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
     printf "\n"
-    printf "\t--load-ahead <N>             Specify the number of audio files to load ahead. Defaults to 3. [For in order playlists only].\n"
-    printf "\t                             Ignored for randomized playlists.\n"
+    printf "\t--load-ahead <N>             Specify the number of audio files to load ahead. Defaults to 3.\n"
     printf "\t--show-cache                 Show the list of files in cache folder\n"
     printf "\t--clear-cache                Clears the cache\n"
     printf "\t--deps-chk                   Check dependencies\n"
@@ -115,8 +114,8 @@ function download_sound() {
 
             yes | ffmpeg -loglevel panic -i "$DOWNLOAD_DIR/$1.$extension" -pass 2 -filter:a dynaudnorm=f=1000,loudnorm=linear=true:measured_I=$i:measured_LRA=$lra:measured_tp=$tp:measured_thresh=$thresh "$DOWNLOAD_DIR/$1.norm.$extension"
 
-            rm "$DOWNLOAD_DIR/$1.$extension"
-            mv "$DOWNLOAD_DIR/$1.norm.$extension" "$DOWNLOAD_DIR/$1"
+            rm "$DOWNLOAD_DIR/$1.$extension" 2>/dev/null
+            mv "$DOWNLOAD_DIR/$1.norm.$extension" "$DOWNLOAD_DIR/$1" 2>/dev/null
         else
             mv "$DOWNLOAD_DIR/$1.$extension" "$DOWNLOAD_DIR/$1"
         fi
@@ -196,17 +195,11 @@ function skip_sig() {
 }
 
 function prev_sig() {
-   if [[ $RAND == "false" ]]; then
-        printf "$REQUEST_COLOR"
-        printf "Received: prev. ASAP Master\n"
-        printf "$DEFAULT_COLOR"
-        PREV="true"
-        SKIP="false"
-    else
-        printf "$ERROR_COLOR" >&2
-        printf "Warning:$REQUEST_COLOR prev$ERROR_COLOR was invoked, but we are playing at random.\n" >&2
-        printf "Try $0 --help.\n$DEFAULT_COLOR" >&2
-    fi
+    printf "$REQUEST_COLOR"
+    printf "Received: prev. ASAP Master\n"
+    printf "$DEFAULT_COLOR"
+    PREV="true"
+    SKIP="false"
 }
 
 function bye_sig() { 
@@ -221,7 +214,7 @@ function bye_sig() {
 
     if [[ $CACHING == "false" ]]; then
         rm "$DOWNLOAD_DIR/$id" 2>/dev/null
-        rm "$DOWNLOAD_DIR/$current_id"
+        rm "$DOWNLOAD_DIR/$current_id" 2>/dev/null
     fi
 
     rm "$DOWNLOAD_DIR/"*.* 2>/dev/null
@@ -448,7 +441,6 @@ function parse_args() {
             if [[ "$#" -gt 1 ]]; then
                 shift
                 TEMPORARY_DIR=$1
-                TEMPORARY_FILE="$1/ymph.playlist"
                 shift
             else
                 printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
@@ -576,56 +568,46 @@ function start_up() {
     mkdir -p "$DOWNLOAD_DIR"
 
     if [[ $RAND == "true" ]]; then
-        AHEAD_LOADING=0
+        shuf "$PLAYLIST_FILE" > "$TEMPORARY_DIR/ymph-shuf.playlist"
+        PLAYLIST_FILE="$TEMPORARY_DIR/ymph-shuf.playlist"
     fi
 }
 
 function next_id() {
-    if [[ $RAND == "true" ]]; then
-        ID=$(shuf -n 1 "$PLAYLIST_FILE")
-        AHEAD_ID=$id
-    else
-        let "COUNT++"
-        if [[ $COUNT -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
-            COUNT=1
-        fi
-        ID=$(head -n $COUNT "$PLAYLIST_FILE" | tail -n1)
-
-        let "AHEAD_COUNT++"
-        if [[ $AHEAD_COUNT -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
-            AHEAD_COUNT=1
-        fi
-        AHEAD_ID=$(head -n $AHEAD_COUNT "$PLAYLIST_FILE" | tail -n1)
+    let "COUNT++"
+    if [[ $COUNT -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
+        COUNT=1
     fi
+    ID=$(head -n $COUNT "$PLAYLIST_FILE" | tail -n1)
+
+    let "AHEAD_COUNT++"
+    if [[ $AHEAD_COUNT -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
+        AHEAD_COUNT=1
+    fi
+    AHEAD_ID=$(head -n $AHEAD_COUNT "$PLAYLIST_FILE" | tail -n1)
 }
 
 function prev_id() {
-    if [[ $RAND == "true" ]]; then
-        printf "$ERROR_COLOR" >&2
-        printf "ERROR\n$DEFAULT_COLOR" >&2
+    let "COUNT--"
+    if [[ $COUNT == 0 ]]; then
+        COUNT=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
+    fi
+    ID=$(head -n $COUNT "$PLAYLIST_FILE" | tail -n1)
 
-    else
+    while [[ -f "$DOWNLOAD_DIR/$ID.invalID" ]]; do
         let "COUNT--"
         if [[ $COUNT == 0 ]]; then
             COUNT=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
         fi
         ID=$(head -n $COUNT "$PLAYLIST_FILE" | tail -n1)
+    done
 
-        while [[ -f "$DOWNLOAD_DIR/$ID.invalID" ]]; do
-            let "COUNT--"
-            if [[ $COUNT == 0 ]]; then
-                COUNT=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
-            fi
-            ID=$(head -n $COUNT "$PLAYLIST_FILE" | tail -n1)
-        done
-
-        let "AHEAD_COUNT = COUNT + AHEAD_LOADING"
-        local file_size=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
-        if [[ $AHEAD_COUNT -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
-            let "AHEAD_COUNT -= file_size"
-        fi
-        AHEAD_ID=$(head -n  $AHEAD_COUNT "$PLAYLIST_FILE" | tail -n1)
+    let "AHEAD_COUNT = COUNT + AHEAD_LOADING"
+    local file_size=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
+    if [[ $AHEAD_COUNT -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
+        let "AHEAD_COUNT -= file_size"
     fi
+    AHEAD_ID=$(head -n  $AHEAD_COUNT "$PLAYLIST_FILE" | tail -n1)
 }
 
 function try_sleep() {
@@ -670,7 +652,7 @@ function main_loop() {
         if [[ $PREV == "false" ]]; then
             if [[ ! -z "$current_id" && -f "$DOWNLOAD_DIR/$current_id" ]]; then
                 if [[ $CACHING == "false" ]]; then
-                    rm "$DOWNLOAD_DIR/$current_id"
+                    rm "$DOWNLOAD_DIR/$current_id" 2>/dev/null
                 fi
             fi
             current_id="$ID"
@@ -719,32 +701,20 @@ function main_loop() {
                 download_sound $AHEAD_ID &
                 local dl_pid=$!
 
-                if [[ $RAND == true ]]; then
-                    wait $dl_pid
-                    ans=$?
 
-                    while [[ $(ps -p $dl_pid | wc -l) -gt 1 ]]; do
-                        wait $dl_pid
-                        ans=$?
-                    done
+                wait ${dl_pids[0]}
+                ans=$?
 
-                else
-
-
+                while [[ $PREV == "false" && $(ps -p ${dl_pids[0]} | wc -l) -gt 1 ]]; do
                     wait ${dl_pids[0]}
                     ans=$?
+                done
 
-                    while [[ $PREV == "false" && $(ps -p ${dl_pids[0]} | wc -l) -gt 1 ]]; do
-                        wait ${dl_pids[0]}
-                        ans=$?
+                if [[ $PREV == "false" ]]; then
+                    for i in $(seq 0 $(($AHEAD_LOADING - 2))); do
+                        dl_pids[$i]=${dl_pids[$(($i + 1))]}
                     done
-
-                    if [[ $PREV == "false" ]]; then
-                        for i in $(seq 0 $(($AHEAD_LOADING - 2))); do
-                            dl_pids[$i]=${dl_pids[$(($i + 1))]}
-                        done
-                        dl_pids[$(($AHEAD_LOADING - 1))]=$dl_pid
-                    fi
+                    dl_pids[$(($AHEAD_LOADING - 1))]=$dl_pid
                 fi
             fi
 
