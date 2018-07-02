@@ -20,5 +20,6 @@ _arguments '--help[print help and exit]'\
         '-N[normalize audio]'\
         '--show-cache[show the list of cached files]'\
         '--clear-cache[clears the cache]'\
-        '--load-ahead[specify the number of audio files to load ahead]'
+        '--load-ahead[specify the number of audio files to load ahead]'\
+        '--deps-chk[check dependencies]'
 

@@ -59,6 +59,7 @@ function show_help() {
     printf "\t                             Ignored for randomized playlists.\n"
     printf "\t--show-cache                 Show the list of files in cache folder\n"
     printf "\t--clear-cache                Clears the cache\n"
+    printf "\t--deps-chk                   Check dependencies\n"
     printf "\t--download-dir <folder>  -d  specifies a folder where to download audio file\n"
     printf "\t                             Defaults to \$XDG_CACHE_HOME/ymph,\n"
     printf "\t                                      or \$HOME/.cache/ymph if \$XDG_CACHE_HOME is not set\n"
@@ -78,16 +79,16 @@ function download_sound() {
     fi
     printf "\t$ID_COLOR$1$DEFAULT_COLOR is not present in cache. Downloading it.\n"
 
-    local audio_formats=$(youtube-dl --no-warnings -F -- "$1" | env grep "audio only" 2>/dev/null)
+    local audio_formats=$(youtube-dl --no-warnings -F -- "$1" | grep "audio only" 2>/dev/null)
     local format_count=$(echo "$audio_formats" | wc -l)
 
     if [[ $format_count -gt 1 ]]; then
-        local audio_formats_2=$(echo "$audio_formats" | env grep -v "worst")
+        local audio_formats_2=$(echo "$audio_formats" | grep -v "worst")
         local format_count=$(echo "$audio_formats" | wc -l)
 
         if [[ $format_count -ge 1 ]]; then
             local audio_formats="$audio_formats_2"
-            local audio_formats_2=$(echo "$audio_formats" | env grep "m4a")
+            local audio_formats_2=$(echo "$audio_formats" | grep "m4a")
             local format_count=$(echo "$audio_formats" | wc -l)
 
             if [[ $format_count -ge 1 ]]; then
@@ -509,6 +510,10 @@ function parse_args() {
             rm "$DOWNLOAD_DIR"/* 2>/dev/null
             exit 0
             ;;
+        --deps-chk)
+            check_dependencies
+            exit 0
+            ;;
         *)
             printf "$COMMAND: $1: Unknow field.\nTry $COMMAND --help.\n" >&2
             exit 1
@@ -775,6 +780,76 @@ function main_loop() {
         fi
         SKIP="false"
     done
+}
+
+function check_dependency() {
+    printf "\t\t$1:"
+    for i in $(seq $(echo $1 | wc -c) 10); do
+        printf " "
+    done
+
+    if hash $1 2>/dev/null; then
+        printf "\e[38;5;82m present\e[38;5;15m\n"
+    else
+        printf "\e[38;5;9m absent\e[38;5;15m\n"
+    fi
+}
+
+function check_dependencies() {
+    printf "Core:\n"
+    printf "\t[coreutils]:\n"
+    check_dependency cat
+    check_dependency cut
+    check_dependency date
+    check_dependency echo
+    check_dependency head
+    check_dependency mkdir
+    check_dependency mv
+    check_dependency printf
+    check_dependency rm
+    check_dependency seq
+    check_dependency shuf
+    check_dependency sleep
+    check_dependency tail
+    check_dependency touch
+    check_dependency wc
+
+    printf "\t[ffmpeg]:\n"
+    check_dependency ffprobe
+
+    printf "\t[grep]:\n"
+    check_dependency grep
+
+    printf "\t[jq]:\n"
+    check_dependency jq
+
+    printf "\t[procps-ng]:\n"
+    check_dependency ps
+
+    printf "\t[sed]:\n"
+    check_dependency sed
+
+    printf "\t[util-linux]:\n"
+    check_dependency kill
+
+    printf "\t[youtube-dl]:\n"
+    check_dependency youtube-dl
+
+
+    printf "\n"
+    printf "Required by --show-cache:\n"
+    printf "\t[coreutils]:\n"
+    check_dependency ls
+    check_dependency stat
+
+    printf "\n"
+    printf "Required by --normalize:\n"
+
+    printf "\t[coreutils]:\n"
+    check_dependency yes
+
+    printf "\t[ffmpeg]:\n"
+    check_dependency ffmpeg
 }
 
 init
