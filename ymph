@@ -761,7 +761,7 @@ function check_dependency() {
     if hash $1 2>/dev/null; then
         printf "\e[38;5;82m present\e[38;5;15m\n"
     else
-        printf "\e[38;5;9m absent\e[38;5;15m\n"
+        printf "\e[38;5;9m missing\e[38;5;15m\n"
     fi
 }
 
