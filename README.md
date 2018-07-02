@@ -2,7 +2,7 @@
 
 Youtube Music Playlist Helper (ymph) is a script designed to help you to play youtube playlist in the background, together with a daemonized music player (such as MPD)
 
-It currently only supports vlc (which must have been launched via 'vlcd' before hand), but can be easily adapted by editing the first few lines, in which case you won't need 'vlc-ctl' and 'vlcd' (this will be configurable in the future)
+It currently only supports vlc but can be easily adapted by editing the first few lines, in which case you won't need 'vlc-ctl' and 'vlcd' (this will be configurable in the future)
 
 ## Dependencies
 
