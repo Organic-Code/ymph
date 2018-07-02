@@ -35,8 +35,8 @@ function show_help() {
     printf "\t--file <playlist_file>   -f  use the specified playlist, previously saved with --save-as.\n"
     printf "\t                             Cannot be used together with --save-as\n"
     printf "\t                             If --url is not specified, it will take a default value.\n"
-    printf "\t                             defaults to \$XDG_MUSIC_DIR/youtube.playlist,\n"
-    printf "\t                                      or \$HOME/Music/youtube.playlist if \$XDG_MUSIC_DIR is not set\n"
+    printf "\t                             defaults to \$XDG_MUSIC_DIR/ymph.playlist,\n"
+    printf "\t                                      or \$HOME/Music/ymph.playlist if \$XDG_MUSIC_DIR is not set\n"
     printf "\t--random                 -r  randomize the music order\n"
     printf "\t--normalize              -N  normalize audio file after download (disabled by default)\n"
     printf "\t                             [! might take some time]\n"
@@ -351,9 +351,9 @@ function init() {
     AHEAD_LOADING=3
  
     if [[ ! -z ${XDG_MUSIC_DIR+set} ]]; then
-        PLAYLIST_FILE="$XDG_MUSIC_DIR/youtube.playlist"
+        PLAYLIST_FILE="$XDG_MUSIC_DIR/ymph.playlist"
     else
-        PLAYLIST_FILE="$HOME/Music/youtube.playlist"
+        PLAYLIST_FILE="$HOME/Music/ymph.playlist"
     fi
 
     if [[ ! -z ${XDG_CACHE_HOME+set} ]]; then
@@ -447,7 +447,7 @@ function parse_args() {
             if [[ "$#" -gt 1 ]]; then
                 shift
                 TEMPORARY_DIR=$1
-                TEMPORARY_FILE="$1/youtube.playlist"
+                TEMPORARY_FILE="$1/ymph.playlist"
                 shift
             else
                 printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
@@ -519,7 +519,7 @@ function parse_args() {
 
 function start_up() {
     PID_FILE="$TEMPORARY_DIR/ymph"
-    TEMPORARY_FILE="$TEMPORARY_DIR/youtube.playlist"
+    TEMPORARY_FILE="$TEMPORARY_DIR/ymph.playlist"
 
     if [[ -f "$PID_FILE" ]]; then
         if [[ "$REMOTE" == "none" ]]; then
