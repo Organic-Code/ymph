@@ -14,10 +14,13 @@ ymph has the following dependencies (arch linux package names):
 * grep
 * jq
 * procps-ng
+* sed
 * util-linux
 * youtube-dl
 
-if you choose to use vlcd and vlc-ctl, following depencies are added:
+to check for those dependencies, you may run 'ymph --deps-chk'.
+
+If you choose to use vlcd and vlc-ctl, following depencies are added:
 
 * openbsd-netcat
 * vlc
@@ -55,10 +58,10 @@ Available options:
 	--play-pause     play-pause  toggle play/pause
 	                             An instance of ymph should already be running and have the same temp directory
 
-	--load-ahead <N>             Specify the number of audio files to load ahead. Defaults to 3. [For in order playlists only].
-	                             Ignored for randomized playlists.
+	--load-ahead <N>             Specify the number of audio files to load ahead. Defaults to 3.
 	--show-cache                 Show the list of files in cache folder
 	--clear-cache                Clears the cache
+	--deps-chk                   Check dependencies
 	--download-dir <folder>  -d  specifies a folder where to download audio file
 	                             Defaults to $XDG_CACHE_HOME/ymph,
 	                                      or $HOME/.cache/ymph if $XDG_CACHE_HOME is not set
