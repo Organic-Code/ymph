@@ -522,6 +522,13 @@ function start_up() {
     TEMPORARY_FILE="$TEMPORARY_DIR/ymph.playlist"
 
     if [[ -f "$PID_FILE" ]]; then
+        if [[ $(ps -e | grep $(cat $PID_FILE) | grep ymph | wc -l) -eq 0 ]]; then
+            printf "$ERROR_COLOR" >&2
+            printf "Error:$DEFAULT_COLOR ymph seems to have died, but didn't clean up after him.\n" >&2
+            printf "If that is the case, delete the file $PID_FILE\n"
+            exit 3
+        fi
+
         if [[ "$REMOTE" == "none" ]]; then
             printf "Already running!\n"
             exit 2
@@ -532,8 +539,6 @@ function start_up() {
     elif [[ "$REMOTE" != "none" ]]; then
         printf "ymph is not running!\n"
         exit 2
-    else
-        echo "$$" > "$PID_FILE"
     fi
 
     if [[ "$SAVE_AS" == "true" ]]; then
@@ -552,7 +557,12 @@ function start_up() {
         fi
     fi
 
-    if [[ ! -f "$PLAYLIST_FILE" || $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) -eq 0 ]]; then
+    if [[ ! -f "$PLAYLIST_FILE" ]]; then
+        printf "$ERROR_COLOR" >&2
+        printf "Error:$DEFAULT_COLOR Failed to open playlist file.\n" >&2
+        exit 3
+    fi
+    if [[ $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) -eq 0 ]]; then
         printf "$ERROR_COLOR" >&2
         printf "Error:$DEFAULT_COLOR the playlist is empty!\n" >&2
         exit 3
@@ -625,6 +635,7 @@ function try_sleep() {
 
 function main_loop() {
     start_player
+    echo "$$" > "$PID_FILE"
 
     COUNT=0
     AHEAD_COUNT=$(($AHEAD_LOADING - 1))
