@@ -56,9 +56,10 @@ function show_help() {
     printf "\t                             An instance of ymph should already be running and have the same temp directory\n"
     printf "\n"
     printf "\t--load-ahead <N>             Specify the number of audio files to load ahead. Defaults to 3.\n"
-    printf "\t--show-cache                 Show the list of files in cache folder\n"
-    printf "\t--clear-cache                Clears the cache\n"
-    printf "\t--deps-chk                   Check dependencies\n"
+    printf "\t--show-cache                 Show the list of files in cache folder. Any subsequent argument is ignored\n"
+    printf "\t--search <regex>             Search a particular music in the cache. Any subsequent argument is ignored\n"
+    printf "\t--clear-cache                Clears the cache. Any subsequent argument is ignored\n"
+    printf "\t--deps-chk                   Check dependencies. Any subsequent argument is ignored\n"
     printf "\t--download-dir <folder>  -d  specifies a folder where to download audio file\n"
     printf "\t                             Defaults to \$XDG_CACHE_HOME/ymph,\n"
     printf "\t                                      or \$HOME/.cache/ymph if \$XDG_CACHE_HOME is not set\n"
@@ -269,6 +270,7 @@ function quit_sig() {
     exit 1
 }
 
+
 function show_cache() {
     local size=0
     local duration=0
@@ -325,6 +327,28 @@ function show_cache() {
     printf "]\n"
 }
 
+function search_cache() {
+    printf "Cache folder: $DOWNLOAD_DIR\n\n"
+    local matches=()
+    local matching=0
+    local total=0
+    for i in $(ls "$DOWNLOAD_DIR"); do
+        if [[ $(echo $i | cut -d '.' -f 2) == "$i" ]]; then
+            let "total++"
+            local title=$(ffprobe -i $DOWNLOAD_DIR/$i -v quiet -print_format json -show_format | jq -r '.format.tags.title')
+            if [[ $title =~ $1 ]]; then
+                matches=(${matches[@]} "$ID_COLOR$i\t$TITLE_COLOR$title\n")
+                let "matching++"
+            fi
+            printf "\rMatches: $matching/$total"
+        fi
+    done
+    printf "\n\n"
+    for i in ${matches[@]}; do
+        printf -- $i
+    done
+}
+
 function init() {
     COMMAND=$(echo $0 | sed 's/.*\/\(.*\)/\1/')
 
@@ -368,6 +392,9 @@ function init() {
         TEMPORARY_DIR="$XDG_RUNTIME_DIR"
     fi
 
+}
+
+function setup_traps() {
     trap bye_sig    INT
     trap skip_sig   34
     trap bye_sig    35
@@ -376,7 +403,6 @@ function init() {
     trap toggle_sig 38
     trap pause_sig  39
     trap quit_sig   40
-
 }
 
 function parse_args() {
@@ -504,6 +530,17 @@ function parse_args() {
                 show_cache
             else
                 printf "Cache is non-existant!\n"
+            fi
+            exit 0
+            ;;
+        --search)
+            if [[ "$#" -gt 1 ]]; then
+                shift
+                search_cache "$1"
+                shift
+            else
+                printf "field $1: missing operand.\nTry $COMMAND --help.\n" >&2
+                exit 1
             fi
             exit 0
             ;;
@@ -834,6 +871,7 @@ function check_dependencies() {
 
 init
 parse_args "$@"
+setup_traps
 start_up
 main_loop
 

@@ -38,8 +38,8 @@ Available options:
 	--file <playlist_file>   -f  use the specified playlist, previously saved with --save-as.
 	                             Cannot be used together with --save-as
 	                             If --url is not specified, it will take a default value.
-	                             defaults to $XDG_MUSIC_DIR/youtube.playlist,
-	                                      or $HOME/Music/youtube.playlist if $XDG_MUSIC_DIR is not set
+	                             defaults to $XDG_MUSIC_DIR/ymph.playlist,
+	                                      or $HOME/Music/ymph.playlist if $XDG_MUSIC_DIR is not set
 	--random                 -r  randomize the music order
 	--normalize              -N  normalize audio file after download (disabled by default)
 	                             [! might take some time]
@@ -59,9 +59,10 @@ Available options:
 	                             An instance of ymph should already be running and have the same temp directory
 
 	--load-ahead <N>             Specify the number of audio files to load ahead. Defaults to 3.
-	--show-cache                 Show the list of files in cache folder
-	--clear-cache                Clears the cache
-	--deps-chk                   Check dependencies
+	--show-cache                 Show the list of files in cache folder. Any subsequent argument is ignored
+	--search <regex>             Search a particular music in the cache. Any subsequent argument is ignored
+	--clear-cache                Clears the cache. Any subsequent argument is ignored
+	--deps-chk                   Check dependencies. Any subsequent argument is ignored
 	--download-dir <folder>  -d  specifies a folder where to download audio file
 	                             Defaults to $XDG_CACHE_HOME/ymph,
 	                                      or $HOME/.cache/ymph if $XDG_CACHE_HOME is not set
