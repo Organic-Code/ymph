@@ -67,13 +67,15 @@ function show_help() {
 }
 
 function download_sound() {
+    printf "$DEFAULT_COLOR"
+    printf "Preparing music for video $ID_COLOR$1\n"
 
     if [[ -f "$DOWNLOAD_DIR/$1" ]]; then
-        printf "$DEFAULT_COLOR\tUsing cached $ID_COLOR$1\n"
+        printf "$DEFAULT_COLOR\tUsing cached $ID_COLOR$1$DEFAULT_COLOR\n"
         return 0
     elif [[ -f "$DOWNLOAD_DIR/$1.invalid" ]]; then
         printf "$ERROR_COLOR\tError: $ID_COLOR$1$DEFAULT_COLOR has been marked as invalid.\n" >&2
-        printf "\tTo try to redownload, delete the file $ID_COLOR$DOWNLOAD_DIR/$1.invalid\n" >&2
+        printf "\tTo try to redownload, delete the file $ID_COLOR$DOWNLOAD_DIR/$1.invalid$DEFAULT_COLOR\n" >&2
         return 1
     fi
     printf "\t$ID_COLOR$1$DEFAULT_COLOR is not present in cache. Downloading it.\n"
@@ -124,7 +126,7 @@ function download_sound() {
         return 0
     else
 
-        printf "$ERROR_COLOR\tError$DEFAULT_COLOR downloading $ID_COLOR$1.\n" >&2
+        printf "$ERROR_COLOR\tError$DEFAULT_COLOR downloading $ID_COLOR$1$DEFAULT_COLOR.\n" >&2
         touch "$DOWNLOAD_DIR/$1.invalid"
         return 1
     fi
@@ -478,9 +480,9 @@ function parse_args() {
         --load-ahead)
             if [[ "$#" -gt 1 ]]; then
                 shift
-                re='^[0-9]+$'
+                re='^[1-9][0-9]*$'
                 if ! [[ "$1" =~ $re ]] ; then
-                    printf "field --load-ahead: $1 is not an integer.\n"
+                    printf "field --load-ahead: $1 is not a positive integer.\n"
                     exit 1
                 fi
                 AHEAD_LOADING="$1"
@@ -495,7 +497,11 @@ function parse_args() {
             CACHING=false
             ;;
         --show-cache)
-            show_cache
+            if [[ -d "$DOWNLOAD_DIR" ]]; then
+                show_cache
+            else
+                printf "Cache is non-existant!\n"
+            fi
             exit 0
             ;;
         --clear-cache)
@@ -519,7 +525,7 @@ function start_up() {
     TEMPORARY_FILE="$TEMPORARY_DIR/ymph.playlist"
 
     if [[ -f "$PID_FILE" ]]; then
-        if [[ $(ps -e | grep $(cat $PID_FILE) | grep ymph | wc -l) -eq 0 ]]; then
+        if [[ $(ps -ef | grep $(cat $PID_FILE) | grep ymph | wc -l) -eq 0 && $(ps -ef | grep $(cat $PID_FILE) | grep $COMMAND | wc -l) -eq 0 ]]; then
             printf "$ERROR_COLOR" >&2
             printf "Error:$DEFAULT_COLOR ymph seems to have died, but didn't clean up after him.\n" >&2
             printf "If that is the case, delete the file $PID_FILE\n"
@@ -594,18 +600,9 @@ function prev_id() {
     fi
     ID=$(head -n $COUNT "$PLAYLIST_FILE" | tail -n1)
 
-    while [[ -f "$DOWNLOAD_DIR/$ID.invalID" ]]; do
-        let "COUNT--"
-        if [[ $COUNT == 0 ]]; then
-            COUNT=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
-        fi
-        ID=$(head -n $COUNT "$PLAYLIST_FILE" | tail -n1)
-    done
-
-    let "AHEAD_COUNT = COUNT + AHEAD_LOADING"
-    local file_size=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
-    if [[ $AHEAD_COUNT -gt $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) ]]; then
-        let "AHEAD_COUNT -= file_size"
+    let "AHEAD_COUNT--"
+    if [[ $AHEAD_COUNT == 0 ]]; then
+        AHEAD_COUNT=$(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1)
     fi
     AHEAD_ID=$(head -n  $AHEAD_COUNT "$PLAYLIST_FILE" | tail -n1)
 }
@@ -626,32 +623,32 @@ function main_loop() {
 
     COUNT=0
     AHEAD_COUNT=$(($AHEAD_LOADING - 1))
-    local dl_pids=()
+    declare -A dl_pids
     local ans=1
 
     while [[ $ans != 0 ]]; do
         next_id
-        printf "$DEFAULT_COLOR"
-        printf "Preparing music for video $ID_COLOR$ID\n"
         download_sound "$ID"
         ans=$?
     done
 
     local count_cpy=$COUNT
+    local ahead_cpy=$AHEAD_COUNT
     local id_cpy=$ID
     for i in $(seq 0 $(($AHEAD_LOADING - 1))); do
         next_id
         download_sound "$ID" &
-        dl_pids[$i]=$!
+        dl_pids["$ID"]=$!
     done
     COUNT=$count_cpy
+    AHEAD_COUNT=$ahead_cpy
     ID=$id_cpy
 
     while [[ true ]]; do
 
         if [[ $PREV == "false" ]]; then
             if [[ ! -z "$current_id" && -f "$DOWNLOAD_DIR/$current_id" ]]; then
-                if [[ $CACHING == "false" ]]; then
+                if [[ $CACHING == "false" && "$current_id" != "$ID" ]]; then
                     rm "$DOWNLOAD_DIR/$current_id" 2>/dev/null
                 fi
             fi
@@ -678,48 +675,58 @@ function main_loop() {
         while [[ $ans != 0 ]]; do
 
             if [[ $PREV == "true" ]]; then
+                
+                kill -40 ${dl_pids["$AHEAD_ID"]} 2>/dev/null
+                rm "$DOWNLOAD_DIR/$AHEAD_ID."* 2>/dev/null
+                unset dl_pids["$AHEAD_ID"]
+
+                local id_being_loaded="$ID"
+
                 prev_id
                 current_id=""
                 PREV="false"
                 NOSLEEP="true"
 
-                kill -40 ${dl_pids[$(($AHEAD_LOADING - 1))]} 2>/dev/null
-                rm "$DOWNLOAD_DIR/$AHEAD_ID."* 2>/dev/null
-                while [[ $ans != 0 ]]; do
-                    printf "$DEFAULT_COLOR"
-                    printf "Preparing music for video $ID_COLOR$ID\n"
-                    download_sound $ID
+                download_sound "$id_being_loaded" >/dev/null &
+                dl_pids["$id_being_loaded"]=$!
+
+                download_sound "$ID" &
+                dl_pids["$ID"]=$!
+
+                wait ${dl_pids["$ID"]}
+                ans=$?
+                while [[ $PREV == "false" && $ans -ge 128 ]]; do
+                    wait ${dl_pids["$ID"]}
                     ans=$?
                 done
+
+                if [[ $ans != 0 ]]; then
+                    PREV="true"
+                fi
 
             else
                 next_id
 
-                printf "$DEFAULT_COLOR"
-                printf "Preparing music for video $ID_COLOR$AHEAD_ID\n"
-
                 download_sound $AHEAD_ID &
-                local dl_pid=$!
+                dl_pids["$AHEAD_ID"]=$!
 
-
-                wait ${dl_pids[0]}
+                wait ${dl_pids["$ID"]}
                 ans=$?
 
-                while [[ $PREV == "false" && $(ps -p ${dl_pids[0]} | wc -l) -gt 1 ]]; do
-                    wait ${dl_pids[0]}
+                while [[ $PREV == "false" && $ans -ge 128 ]]; do
+                    wait ${dl_pids["$ID"]}
                     ans=$?
                 done
 
                 if [[ $PREV == "false" ]]; then
-                    for i in $(seq 0 $(($AHEAD_LOADING - 2))); do
-                        dl_pids[$i]=${dl_pids[$(($i + 1))]}
-                    done
-                    dl_pids[$(($AHEAD_LOADING - 1))]=$dl_pid
+                    unset dl_pids["$ID"]
+                else
+                    prev_id
                 fi
+
             fi
 
             if [[ $PREV == "true" ]]; then
-                prev_id
                 ans=1
             fi
 
