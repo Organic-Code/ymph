@@ -68,30 +68,33 @@ function show_help() {
 }
 
 function download_sound() {
-    printf "$DEFAULT_COLOR"
+    printf -- "$DEFAULT_COLOR"
     printf "Preparing music for video $ID_COLOR$1\n"
 
     if [[ -f "$DOWNLOAD_DIR/$1" ]]; then
-        printf "$DEFAULT_COLOR\tUsing cached $ID_COLOR$1$DEFAULT_COLOR\n"
+        printf -- "$DEFAULT_COLOR\tUsing cached $ID_COLOR$1$DEFAULT_COLOR\n"
+        if [[ -f "$DOWNLOAD_DIR/$1.invalid" ]]; then
+            rm -- "$DOWNLOAD_DIR/$1.invalid"
+        fi
         return 0
     elif [[ -f "$DOWNLOAD_DIR/$1.invalid" ]]; then
-        printf "$ERROR_COLOR\tError: $ID_COLOR$1$DEFAULT_COLOR has been marked as invalid.\n" >&2
+        printf -- "$ERROR_COLOR\tError: $ID_COLOR$1$DEFAULT_COLOR has been marked as invalid.\n" >&2
         printf "\tTo try to redownload, delete the file $ID_COLOR$DOWNLOAD_DIR/$1.invalid$DEFAULT_COLOR\n" >&2
         return 1
     fi
     printf "\t$ID_COLOR$1$DEFAULT_COLOR is not present in cache. Downloading it.\n"
 
     local audio_formats=$(youtube-dl --no-warnings -F -- "$1" | grep "audio only" 2>/dev/null)
-    local format_count=$(echo "$audio_formats" | wc -l)
+    local format_count=$(printf -- "$audio_formats" | wc -l)
 
     if [[ $format_count -gt 1 ]]; then
-        local audio_formats_2=$(echo "$audio_formats" | grep -v "worst")
-        local format_count=$(echo "$audio_formats" | wc -l)
+        local audio_formats_2=$(printf -- "$audio_formats" | grep -v "worst")
+        local format_count=$(printf -- "$audio_formats" | wc -l)
 
         if [[ $format_count -ge 1 ]]; then
             local audio_formats="$audio_formats_2"
-            local audio_formats_2=$(echo "$audio_formats" | grep "m4a")
-            local format_count=$(echo "$audio_formats" | wc -l)
+            local audio_formats_2=$(printf -- "$audio_formats" | grep "m4a")
+            local format_count=$(printf -- "$audio_formats" | wc -l)
 
             if [[ $format_count -ge 1 ]]; then
                 local audio_formats="$audio_formats_2"
@@ -99,8 +102,8 @@ function download_sound() {
         fi
     fi
 
-    local format=$(echo "$audio_formats" | head -n1 | cut -d ' ' -f 1)
-    local extension=$(echo "$audio_formats" | head -n1 | sed 's/[0-9]\+ \+//' | cut -d ' ' -f 1)
+    local format=$(printf -- "$audio_formats" | head -n1 | cut -d ' ' -f 1)
+    local extension=$(printf -- "$audio_formats" | head -n1 | sed 's/[0-9]\+ \+//' | cut -d ' ' -f 1)
 
     youtube-dl --no-warnings -q -f $format --add-metadata -o "$DOWNLOAD_DIR/$1.$extension" -- "$1" >/dev/null 2>/dev/null
 
@@ -110,24 +113,24 @@ function download_sound() {
         if [[ $NORMALIZE == "true" ]]; then
             printf "\t$ID_COLOR$1$DEFAULT_COLOR: normalizing.\n"
             local file_info=$(ffmpeg -y -i "$DOWNLOAD_DIR/$1.$extension" -pass 1 -filter:a loudnorm=print_format=json -f null - 2>&1)
-            local lra=$(echo $file_info | grep "input_lra" | sed 's/.*"input_lra" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
-            local tp=$(echo $file_info | grep "input_tp" | sed 's/.*"input_tp" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
-            local thresh=$(echo $file_info | grep "input_thresh" | sed 's/.*"input_thresh" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
-            local i=$(echo $file_info | grep "input_i" | sed 's/.*"input_i" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+            local lra=$(printf -- "$file_info" | grep "input_lra" | sed 's/.*"input_lra" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+            local tp=$(printf -- "$file_info" | grep "input_tp" | sed 's/.*"input_tp" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+            local thresh=$(printf -- "$file_info" | grep "input_thresh" | sed 's/.*"input_thresh" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
+            local i=$(printf -- "$file_info" | grep "input_i" | sed 's/.*"input_i" : "\(-\?[0-9]*\.[0-9]*\)".*/\1/')
 
             yes | ffmpeg -loglevel panic -i "$DOWNLOAD_DIR/$1.$extension" -pass 2 -filter:a dynaudnorm=f=1000,loudnorm=linear=true:measured_I=$i:measured_LRA=$lra:measured_tp=$tp:measured_thresh=$thresh "$DOWNLOAD_DIR/$1.norm.$extension"
 
-            rm "$DOWNLOAD_DIR/$1.$extension" 2>/dev/null
-            mv "$DOWNLOAD_DIR/$1.norm.$extension" "$DOWNLOAD_DIR/$1" 2>/dev/null
+            rm -- "$DOWNLOAD_DIR/$1.$extension" 2>/dev/null
+            mv -- "$DOWNLOAD_DIR/$1.norm.$extension" "$DOWNLOAD_DIR/$1" 2>/dev/null
         else
-            mv "$DOWNLOAD_DIR/$1.$extension" "$DOWNLOAD_DIR/$1"
+            mv -- "$DOWNLOAD_DIR/$1.$extension" "$DOWNLOAD_DIR/$1"
         fi
-        printf "$ID_COLOR$1$DEFAULT_COLOR: ready.\n"
+        printf -- "$ID_COLOR$1$DEFAULT_COLOR: ready.\n"
 
         return 0
     else
 
-        printf "$ERROR_COLOR\tError$DEFAULT_COLOR downloading $ID_COLOR$1$DEFAULT_COLOR.\n" >&2
+        printf -- "$ERROR_COLOR\tError$DEFAULT_COLOR downloading $ID_COLOR$1$DEFAULT_COLOR.\n" >&2
         touch "$DOWNLOAD_DIR/$1.invalid"
         return 1
     fi
@@ -149,7 +152,7 @@ function readable_size() {
         let "size = size / 1024"
         suffix="Gio"
     fi
-    printf "$size $suffix"
+    printf -- "$size $suffix"
 }
 
 function readable_time() {
@@ -164,20 +167,20 @@ function readable_time() {
     let "hours = hours - 24 * days"
 
     if [[ $days -gt 0 ]]; then
-        printf "$days"
+        printf -- "$days"
         printf "d "
     fi
 
     if [[ $hours -lt 10 ]]; then
         printf "0$hours:"
     else
-        printf "$hours:"
+        printf -- "$hours:"
     fi
 
     if [[ $minutes -lt 10 ]]; then
         printf "0$minutes'"
     else
-        printf "$minutes'"
+        printf -- "$minutes'"
     fi
 
     if [[ $seconds -eq 0 ]]; then
@@ -185,50 +188,50 @@ function readable_time() {
     elif [[ $seconds -lt 10 ]]; then
         printf "0$seconds"
     else
-        printf "$seconds"
+        printf -- "$seconds"
     fi
 }
 
 function skip_sig() {
-    printf "$REQUEST_COLOR"
+    printf -- "$REQUEST_COLOR"
     printf "Received: next. ASAP Master\n"
-    printf "$DEFAULT_COLOR"
+    printf -- "$DEFAULT_COLOR"
     SKIP="true"
     PREV="false"
 }
 
 function prev_sig() {
-    printf "$REQUEST_COLOR"
+    printf -- "$REQUEST_COLOR"
     printf "Received: prev. ASAP Master\n"
-    printf "$DEFAULT_COLOR"
+    printf -- "$DEFAULT_COLOR"
     PREV="true"
     SKIP="false"
 }
 
 function bye_sig() { 
-    printf "$REQUEST_COLOR"
+    printf -- "$REQUEST_COLOR"
     printf "Received: quit. Good bye\n"
-    printf "$DEFAULT_COLOR"
+    printf -- "$DEFAULT_COLOR"
  
-    rm "$PID_FILE"
+    rm -- "$PID_FILE"
     if [[ -f "$TEMPORARY_FILE" ]]; then
-        rm "$TEMPORARY_FILE"
+        rm -- "$TEMPORARY_FILE"
     fi
 
     if [[ $CACHING == "false" ]]; then
-        rm "$DOWNLOAD_DIR/$id" 2>/dev/null
-        rm "$DOWNLOAD_DIR/$current_id" 2>/dev/null
+        rm -- "$DOWNLOAD_DIR/$id" 2>/dev/null
+        rm -- "$DOWNLOAD_DIR/$current_id" 2>/dev/null
     fi
 
-    rm "$DOWNLOAD_DIR/"*.* 2>/dev/null
+    rm -- "$DOWNLOAD_DIR/"*.* 2>/dev/null
     stop_player
     exit
 }
 
 function play_sig() {
-    printf "$REQUEST_COLOR"
+    printf -- "$REQUEST_COLOR"
     printf "Received: play\n"
-    printf "$DEFAULT_COLOR"
+    printf -- "$DEFAULT_COLOR"
     
     if [[ $STATE == "pause" ]]; then
         STATE_CHANGED="true"
@@ -253,9 +256,9 @@ function toggle_sig() {
 }
 
 function pause_sig() {
-    printf "$REQUEST_COLOR"
+    printf -- "$REQUEST_COLOR"
     printf "Received: pause\n"
-    printf "$DEFAULT_COLOR"
+    printf -- "$DEFAULT_COLOR"
 
     if [[ $STATE == "play" ]]; then
         STATE_CHANGED="true"
@@ -283,16 +286,16 @@ function show_cache() {
     printf "Cache folder: $DOWNLOAD_DIR\n"
     printf "File list:\n"
     for i in $(ls "$DOWNLOAD_DIR"); do
-        if [[ $(echo $i | cut -d '.' -f 2) == "invalid" ]]; then
-            printf "$ID_COLOR$(echo $i | cut -d '.' -f 1)$ERROR_COLOR\tVideo is unavailable\n"
+        if [[ $(printf -- "$i" | cut -d '.' -f 2) == "invalid" ]]; then
+            printf -- "$ID_COLOR$(printf -- "$i" | cut -d '.' -f 1)$ERROR_COLOR\tVideo is unavailable\n"
             let "invalid_count++"
 
-        elif [[ $(echo $i | cut -d '.' -f 2) == "$i" ]]; then
+        elif [[ $(printf -- "$i" | cut -d '.' -f 2) == "$i" ]]; then
             local dur_title=$(ffprobe -i $DOWNLOAD_DIR/$i -v quiet -print_format json -show_format | jq -r '.format.duration,.format.tags.title')
-            local title=$(echo $dur_title | cut -d ' ' -f 2-)
-            local this_duration=$(echo $dur_title | cut -d '.' -f 1)
+            local title=$(printf -- "$dur_title" | tail -n 1)
+            local this_duration=$(printf -- "$dur_title" | head -n 1 | cut -d '.' -f 1)
 
-            printf "$ID_COLOR$i\t$TITLE_COLOR$title\n"
+            printf -- "$ID_COLOR$i\t$TITLE_COLOR$title\n"
 
             duration=$(($duration + $this_duration))
             if [[ $this_duration -gt $longest ]]; then
@@ -310,19 +313,19 @@ function show_cache() {
             let "valid_count++"
         fi
     done
-    printf "$DEFAULT_COLOR"
+    printf -- "$DEFAULT_COLOR"
     printf "\nValid tracks:     $valid_count"
     printf "\nBad tracks:       $invalid_count"
     printf "\nTotal cache size: "
     readable_size $size
     printf "\nTotal duration:   "
     readable_time $duration
-    printf "\nHeaviest file:   $ID_COLOR $heaviest_id$DEFAULT_COLOR - $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$heaviest_id -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)"
-    printf "$DEFAULT_COLOR ["
+    printf "\nHeaviest file:   $ID_COLOR $heaviest_id$DEFAULT_COLOR - $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$heaviest_id -show_format -v quiet -print_format json | jq -r '.format.tags.title')"
+    printf -- "$DEFAULT_COLOR ["
     readable_size $heaviest
     printf "]"
-    printf "\nLongest music:   $ID_COLOR $longest_id$DEFAULT_COLOR - $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$heaviest_id -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)"
-    printf "$DEFAULT_COLOR ["
+    printf "\nLongest music:   $ID_COLOR $longest_id$DEFAULT_COLOR - $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$longest_id -show_format -v quiet -print_format json | jq -r '.format.tags.title')"
+    printf -- "$DEFAULT_COLOR ["
     readable_time $longest
     printf "]\n"
 }
@@ -333,7 +336,7 @@ function search_cache() {
     local matching=0
     local total=0
     for i in $(ls "$DOWNLOAD_DIR"); do
-        if [[ $(echo $i | cut -d '.' -f 2) == "$i" ]]; then
+        if [[ $(printf -- "$i" | cut -d '.' -f 2) == "$i" ]]; then
             let "total++"
             local title=$(ffprobe -i $DOWNLOAD_DIR/$i -v quiet -print_format json -show_format | jq -r '.format.tags.title')
             if [[ $title =~ $1 ]]; then
@@ -350,7 +353,7 @@ function search_cache() {
 }
 
 function init() {
-    COMMAND=$(echo $0 | sed 's/.*\/\(.*\)/\1/')
+    COMMAND=$(printf -- "$0" | sed 's/.*\/\(.*\)/\1/')
 
     ID_COLOR="\e[38;5;14m"
     ERROR_COLOR="\e[38;5;9m"
@@ -553,7 +556,7 @@ function parse_args() {
             exit 0
             ;;
         *)
-            printf "$COMMAND: $1: Unknow field.\nTry $COMMAND --help.\n" >&2
+            printf -- "$COMMAND: $1: Unknow field.\nTry $COMMAND --help.\n" >&2
             exit 1
         esac
 
@@ -566,7 +569,7 @@ function start_up() {
 
     if [[ -f "$PID_FILE" ]]; then
         if [[ $(ps -ef | grep $(cat $PID_FILE) | grep ymph | wc -l) -eq 0 && $(ps -ef | grep $(cat $PID_FILE) | grep $COMMAND | wc -l) -eq 0 ]]; then
-            printf "$ERROR_COLOR" >&2
+            printf -- "$ERROR_COLOR" >&2
             printf "Error:$DEFAULT_COLOR ymph seems to have died, but didn't clean up after him.\n" >&2
             printf "If that is the case, delete the file $PID_FILE\n"
             exit 3
@@ -601,12 +604,12 @@ function start_up() {
     fi
 
     if [[ ! -f "$PLAYLIST_FILE" ]]; then
-        printf "$ERROR_COLOR" >&2
+        printf -- "$ERROR_COLOR" >&2
         printf "Error:$DEFAULT_COLOR Failed to open playlist file.\n" >&2
         exit 3
     fi
     if [[ $(wc -l "$PLAYLIST_FILE" | cut -d ' ' -f 1) -eq 0 ]]; then
-        printf "$ERROR_COLOR" >&2
+        printf -- "$ERROR_COLOR" >&2
         printf "Error:$DEFAULT_COLOR the playlist is empty!\n" >&2
         exit 3
     fi
@@ -659,7 +662,7 @@ function try_sleep() {
 
 function main_loop() {
     start_player
-    echo "$$" > "$PID_FILE"
+    printf "$$" > "$PID_FILE"
 
     COUNT=0
     AHEAD_COUNT=$(($AHEAD_LOADING - 1))
@@ -694,7 +697,7 @@ function main_loop() {
             fi
             current_id="$ID"
 
-            printf "$ID_COLOR"
+            printf -- "$ID_COLOR"
             printf "Now playing $TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$current_id -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)$DEFAULT_COLOR [$ID_COLOR$current_id$DEFAULT_COLOR]\n"
 
             while [[ $STATE == "pause" && $SKIP == "false" ]]; do
@@ -801,7 +804,7 @@ function main_loop() {
 
 function check_dependency() {
     printf "\t\t$1:"
-    for i in $(seq $(echo $1 | wc -c) 10); do
+    for i in $(seq $(printf -- "$1" | wc -c) 10); do
         printf " "
     done
 
@@ -818,7 +821,6 @@ function check_dependencies() {
     check_dependency cat
     check_dependency cut
     check_dependency date
-    check_dependency echo
     check_dependency head
     check_dependency mkdir
     check_dependency mv
