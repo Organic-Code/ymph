@@ -286,9 +286,12 @@ function show_cache() {
             let "invalid_count++"
 
         elif [[ $(echo $i | cut -d '.' -f 2) == "$i" ]]; then
-            printf "$ID_COLOR$i\t$TITLE_COLOR$(ffprobe -i $DOWNLOAD_DIR/$i -show_format -v quiet | grep TAG:title | cut -d '=' -f 2)\n"
+            local dur_title=$(ffprobe -i $DOWNLOAD_DIR/$i -v quiet -print_format json -show_format | jq -r '.format.duration,.format.tags.title')
+            local title=$(echo $dur_title | cut -d ' ' -f 2-)
+            local this_duration=$(echo $dur_title | cut -d '.' -f 1)
 
-            local this_duration=$(ffprobe -i $DOWNLOAD_DIR/$i -show_entries format=duration -v quiet -of csv="p=0" | cut -d '.' -f 1)
+            printf "$ID_COLOR$i\t$TITLE_COLOR$title\n"
+
             duration=$(($duration + $this_duration))
             if [[ $this_duration -gt $longest ]]; then
                 longest=$this_duration
