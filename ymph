@@ -730,11 +730,15 @@ function main_loop() {
                 PREV="false"
                 NOSLEEP="true"
 
-                download_sound "$id_being_loaded" >/dev/null &
-                dl_pids["$id_being_loaded"]=$!
+                if [[ ! -n ${dl_pids["$id_being_loaded"]} ]]; then
+                    download_sound "$id_being_loaded" >/dev/null &
+                    dl_pids["$id_being_loaded"]=$!
+                fi
 
-                download_sound "$ID" &
-                dl_pids["$ID"]=$!
+                if [[ ! -n ${dl_pids["$ID"]} ]]; then
+                    download_sound "$ID" &
+                    dl_pids["$ID"]=$!
+                fi
 
                 wait ${dl_pids["$ID"]}
                 ans=$?
@@ -743,6 +747,10 @@ function main_loop() {
                     ans=$?
                 done
 
+                if [[ $PREV == "false" ]]; then
+                    unset dl_pids["$ID"]
+                fi
+
                 if [[ $ans != 0 ]]; then
                     PREV="true"
                 fi
@@ -750,8 +758,15 @@ function main_loop() {
             else
                 next_id
 
-                download_sound $AHEAD_ID &
-                dl_pids["$AHEAD_ID"]=$!
+                if [[ ! -n ${dl_pids["$AHEAD_ID"]} ]]; then
+                    download_sound $AHEAD_ID &
+                    dl_pids["$AHEAD_ID"]=$!
+                fi
+
+                if [[ ! -n ${dl_pids["$ID"]} ]]; then
+                    download_sound $ID &
+                    dl_pids["$ID"]=$!
+                fi
 
                 wait ${dl_pids["$ID"]}
                 ans=$?
